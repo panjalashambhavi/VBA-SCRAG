@@ -1,0 +1,1297 @@
+\documentclass[conference]{IEEEtran}
+
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{booktabs}
+\usepackage{url}
+\usepackage[colorlinks=true, linkcolor=black, citecolor=black, urlcolor=blue]{hyperref}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+% ============================================================
+% TITLE
+% ============================================================
+
+\title{
+VBA-SCRAG: A Verify-before-Accept Framework for
+Reliability-Aware Self-Correcting Retrieval-Augmented Generation
+}
+
+% ============================================================
+% AUTHOR
+% ============================================================
+
+\author{
+\IEEEauthorblockN{Panjala Shambhavi}
+\IEEEauthorblockA{
+B.Tech -- Artificial Intelligence and Machine Learning\\
+Sphoorthy Engineering College, Hyderabad, India\\
+AIML \& DS Intern, DRDO -- Research Centre Imarat (RCI)\\
+Email: pshambhavi701@gmail.com
+}
+}
+
+\maketitle
+
+% ============================================================
+% ABSTRACT
+% ============================================================
+
+\begin{abstract}
+Retrieval-Augmented Generation (RAG) improves the factual grounding of
+large language models by incorporating information retrieved from
+external knowledge sources. However, retrieval errors, insufficient
+evidence, and unsupported generation can still produce unreliable
+responses. Recent approaches have introduced adaptive retrieval,
+self-reflection, corrective retrieval, and iterative self-correction to
+address these limitations. Nevertheless, generating a new response does
+not necessarily guarantee improved grounding over the previous response.
+
+This work proposes VBA-SCRAG (Verify-before-Accept Self-Correcting
+Retrieval-Augmented Generation), a reliability-aware framework that
+introduces an explicit verification gate into the correction loop. The
+framework evaluates the grounding of an initial response, performs a
+targeted corrective action when required, and verifies the candidate
+response before accepting it. A correction is accepted only when its
+grounding score improves over the previous response by at least a
+predefined improvement margin; otherwise, the previous response is
+retained.
+
+A preliminary evaluation is conducted using 50 questions from the
+HotpotQA validation dataset. Vanilla RAG, Self-Correcting RAG without
+the verification gate, and VBA-SCRAG are compared using evidence
+grounding and correction-related metrics. The three configurations
+achieved average final grounding scores of 0.347978, 0.334418, and
+0.354460, respectively. VBA-SCRAG achieved an average improvement of
+0.006482 over the initial grounding score. Among 45 correction attempts,
+37 were accepted and 8 were rejected, resulting in acceptance and
+rejection rates of 82.22\% and 17.78\%, respectively. These preliminary
+results demonstrate the operation of the verify-before-accept mechanism
+and provide a basis for further evaluation on larger and more diverse
+datasets.
+\end{abstract}
+
+% ============================================================
+% KEYWORDS
+% ============================================================
+
+\begin{IEEEkeywords}
+Retrieval-Augmented Generation, Large Language Models,
+Self-Correcting RAG, Evidence Grounding, Self-Reflection,
+Answer Verification, Hallucination Detection, Generative AI
+\end{IEEEkeywords}
+
+% ============================================================
+% I. INTRODUCTION
+% ============================================================
+
+\section{Introduction}
+
+Large Language Models (LLMs) have demonstrated strong capabilities in
+natural language understanding and generation across a wide range of
+tasks. However, their responses may contain unsupported, inaccurate, or
+hallucinated information, particularly when answering questions that
+require knowledge beyond the information reliably encoded in the model.
+Retrieval-Augmented Generation (RAG) addresses this limitation by
+retrieving information from an external knowledge source and providing
+the retrieved evidence as context to the language model during answer
+generation.
+
+A conventional RAG pipeline generally consists of query processing,
+document retrieval, context construction, and response generation.
+Although this approach can improve factual grounding, the quality of
+the generated response remains dependent on the quality and sufficiency
+of the retrieved evidence. An irrelevant or incomplete retrieval result
+can propagate errors into the generation stage. Similarly, even when
+relevant evidence is retrieved, the language model may fail to use the
+evidence correctly or may generate claims that are not adequately
+supported by the retrieved context.
+
+To address these limitations, recent research has explored mechanisms
+including adaptive retrieval, self-reflection, corrective retrieval,
+iterative generation, and retrieval evaluation. Self-RAG introduced
+self-reflection mechanisms for deciding when retrieval and critique are
+required. Corrective retrieval approaches investigate whether retrieved
+documents are adequate before generation. Other approaches investigate
+iterative and reflective mechanisms for improving generated responses
+through additional reasoning or retrieval cycles.
+
+However, iterative correction introduces another important question:
+\emph{when should a corrected response actually be accepted?} A
+correction step may retrieve different evidence or generate a different
+response without necessarily improving its grounding. Automatically
+replacing the previous response with every newly generated response can
+therefore introduce unnecessary iterations or potentially accept a
+response that is not better supported by the available evidence.
+
+This motivates a verify-before-accept principle for self-correcting RAG.
+Instead of treating the completion of a correction step as sufficient
+for accepting a new response, the proposed approach explicitly
+evaluates whether the correction has improved the grounding of the
+response. The system maintains the previous response as a reference
+state and compares it with the corrected response using an
+evidence-grounding verifier.
+
+Based on this principle, this work proposes
+\textbf{VBA-SCRAG (Verify-before-Accept Self-Correcting
+Retrieval-Augmented Generation)}. The framework introduces a
+verification gate between the correction and acceptance stages. When
+the initial response does not satisfy the required grounding
+threshold, the system diagnoses the potential failure and performs a
+corrective action. The corrected response is subsequently evaluated,
+and it is accepted only when its grounding score improves by at least a
+predefined margin. If the condition is not satisfied, the correction is
+rejected and the system retains the previous response.
+
+The proposed framework therefore treats self-correction as a controlled
+decision process rather than an unconditional iterative generation
+process.
+
+The main contributions of this work are:
+
+\begin{itemize}
+
+\item A verify-before-accept mechanism for self-correcting RAG that
+explicitly evaluates a correction before replacing the current
+response.
+
+\item An evidence-grounding verification mechanism for assessing
+whether a generated response is adequately supported by retrieved
+evidence.
+
+\item A bounded correction strategy that considers grounding improvement
+before accepting a new response.
+
+\item An evaluation framework covering grounding improvement,
+correction acceptance, correction rejection, iteration behavior, and
+computational behavior.
+
+\item A preliminary comparison between Vanilla RAG, conventional
+self-correcting RAG, and VBA-SCRAG.
+
+\end{itemize}
+
+% =========================================================
+% II. RELATED WORK
+% =========================================================
+
+\section{Related Work}
+
+Recent research on Retrieval-Augmented Generation (RAG) has explored
+adaptive retrieval, self-reflection, corrective retrieval, iterative
+self-correction, evidence verification, and reliability-aware generation.
+These developments provide the foundation for the proposed VBA-SCRAG
+framework and motivate the need for an explicit decision mechanism for
+accepting or rejecting generated corrections.
+
+\subsection{Adaptive Retrieval and Self-Reflection}
+
+Self-RAG introduced a self-reflective retrieval-augmented generation
+framework in which a language model learns to determine when retrieval
+is required and evaluates retrieved evidence and generated responses
+through reflection mechanisms \cite{selfrag}. This approach
+extends the conventional retrieve--generate pipeline by incorporating
+retrieval and critique decisions into the generation process.
+
+Self-BioRAG extended retrieval and self-reflection to biomedical
+question answering by incorporating domain-adaptive reflection
+mechanisms and a biomedical retriever \cite{selfbiorag}.
+These approaches demonstrate the usefulness of feedback during
+generation and show that retrieval and reflection can be adapted to
+task-specific requirements.
+
+Reflective RAG further investigates self-evaluation-driven strategy
+optimization for agentic retrieval-augmented generation
+\cite{reflectiverag}. Similarly, RAG-Reflect incorporates
+reflection into an agentic retrieval and reasoning workflow for
+comment-driven code maintenance \cite{ragreflect}. These
+studies demonstrate that reflection can influence subsequent retrieval,
+reasoning, and generation decisions.
+
+However, these approaches do not necessarily provide an explicit
+post-correction acceptance rule that compares a candidate response with
+the previously accepted response. A newly generated response may
+therefore be produced without explicitly measuring whether it provides
+a measurable improvement in evidence grounding.
+
+\subsection{Corrective and Adaptive Retrieval}
+
+Corrective Retrieval-Augmented Generation (CRAG) introduced a retrieval
+evaluator that assesses the quality of retrieved documents and triggers
+corrective retrieval when the available evidence is considered
+inadequate \cite{crag}. The framework combines retrieval
+evaluation, corrective retrieval, and knowledge refinement, providing a
+failure-aware alternative to a fixed retrieval pipeline.
+
+TIRESRAG-R1 investigated retrieval-augmented reasoning using
+reinforcement learning and identified failure conditions including
+information insufficiency, faulty reasoning, and answer--reasoning
+inconsistency \cite{tiresrag}. These failure categories are
+relevant to the failure-diagnosis component of VBA-SCRAG.
+
+An open-source reproduction and explainability analysis of CRAG further
+investigated the behavior of corrective retrieval and its retrieval
+evaluation mechanism \cite{cragreproduction}. Bidirectional RAG
+also explored multi-stage validation for safer self-improving
+retrieval-augmented generation \cite{bidirectional}.
+
+These studies demonstrate the importance of evaluating retrieved
+evidence and performing corrective actions when retrieval is inadequate.
+However, corrective retrieval alone does not guarantee that the
+subsequently generated response is better grounded than the previously
+accepted response. VBA-SCRAG therefore introduces an additional
+decision stage that evaluates the candidate response before replacing
+the current response.
+
+\subsection{Iterative Self-Correction}
+
+Research on intrinsic self-correction has investigated whether large
+language models can identify and correct deficiencies in their own
+generated responses without requiring additional external knowledge
+\cite{intrinsic}. The findings indicate that the effectiveness
+of self-correction depends on the model, task, and prompting conditions.
+
+Self-correcting RAG systems have extended this idea by combining
+retrieval, contextual selection, verification, and iterative correction.
+For example, Self-Correcting RAG employs MMKP-based context selection
+and NLI-guided Monte Carlo Tree Search to improve the faithfulness of
+generated responses \cite{selfcorrecting}.
+
+Self-feedback has also been investigated for retrieval-augmented
+generation in biomedical question answering. The BioASQ self-feedback
+study examined whether language models can critique their own
+retrieval-augmented responses and reported that the effectiveness of
+self-feedback varies across models and tasks \cite{bioasq}.
+
+These studies demonstrate the potential of iterative feedback and
+correction. However, repeated generation may introduce additional
+computational cost and may produce a candidate response that is not
+better than the previous response. Therefore, an explicit mechanism is
+required to determine whether the newly generated correction should be
+accepted.
+
+\subsection{Fine-Grained Evidence Verification}
+
+Reliable RAG systems require mechanisms for determining whether
+generated responses are adequately supported by retrieved evidence.
+RAGChecker introduced a fine-grained evaluation framework for diagnosing
+retrieval and generation quality using claim-level and entailment-based
+metrics \cite{ragchecker}. Such evaluation provides a basis for
+measuring evidence grounding beyond simple end-to-end answer
+evaluation.
+
+G-Retriever investigated retrieval-augmented generation for textual
+graph understanding and question answering through graph-based
+evidence selection \cite{gretriever}. HalluSearch investigated
+retrieval-augmented hallucination detection and fine-grained
+localization of unsupported content \cite{hallusearch}.
+Evidence-Aligned Entity Verification further examined entity--evidence
+alignment using multiple verification dimensions and counterfactual
+stability tests \cite{evidenceverification}.
+
+These approaches demonstrate that evidence-grounding signals can be
+computed at different levels of granularity. However, in the context of
+self-correcting RAG, the important question is not only whether a
+response can be evaluated, but whether the evaluation should directly
+control the acceptance of a correction.
+
+\subsection{Research Gap}
+
+The reviewed literature demonstrates substantial progress in adaptive
+retrieval, self-reflection, corrective retrieval, iterative
+self-correction, and evidence verification. However, these mechanisms
+primarily address retrieval improvement, response generation,
+self-evaluation, or evidence diagnosis as separate stages.
+
+Three observations motivate the proposed framework. First, evidence
+verification is often used as an evaluation or diagnostic mechanism
+rather than as an explicit per-query condition for accepting a
+corrected response. Second, iterative correction mechanisms may generate
+a new response without explicitly measuring whether the candidate
+provides a measurable grounding improvement over the previously
+accepted response. Third, repeated correction introduces additional
+computation, making bounded correction and controlled response
+replacement important considerations.
+
+Based on these observations, this work addresses the need for an
+explicit \textit{verify-before-accept} mechanism in self-correcting RAG.
+The proposed framework:
+
+\begin{itemize}
+
+\item measures the grounding of the initial response;
+
+\item identifies whether corrective action is required;
+
+\item generates a candidate correction using additional retrieval or
+regeneration;
+
+\item independently evaluates the grounding of the candidate response;
+
+\item calculates the grounding improvement relative to the previously
+accepted response; and
+
+\item accepts the correction only when the predefined verification
+condition is satisfied.
+
+\end{itemize}
+
+VBA-SCRAG addresses this gap by introducing a verification gate between
+the correction and acceptance stages. Instead of assuming that every
+correction improves the response, the framework explicitly compares the
+candidate grounding score with the previous grounding score and retains
+the previous response when the required improvement condition is not
+satisfied.
+
+% ============================================================
+% III. PROPOSED METHODOLOGY
+% ============================================================
+
+\section{Proposed Methodology}
+
+The proposed VBA-SCRAG framework consists of five major stages:
+
+\begin{enumerate}
+
+\item Query processing and retrieval.
+
+\item Initial response generation.
+
+\item Evidence grounding evaluation.
+
+\item Corrective retrieval and regeneration.
+
+\item Verify-before-accept decision.
+
+\end{enumerate}
+
+The overall process can be represented as:
+
+\begin{equation}
+q \rightarrow R_0 \rightarrow a_0 \rightarrow g_0
+\rightarrow \text{Correction}
+\rightarrow a_1 \rightarrow g_1
+\rightarrow \text{Verification}
+\end{equation}
+
+where $q$ represents the user query, $R_0$ represents the initially
+retrieved evidence, $a_0$ represents the initial answer, and $g_0$
+represents its grounding score.
+
+% ============================================================
+% VBA-SCRAG ARCHITECTURE
+% ============================================================
+
+\begin{figure*}[!t]
+\centering
+\includegraphics[width=0.99\textwidth,keepaspectratio]{vba_scrag_architecture_bw.png}
+\caption{Architecture of the proposed VBA-SCRAG framework.}
+\label{fig:vba_scrag_architecture}
+\end{figure*}
+As shown in Fig.~\ref{fig:vba_scrag_architecture}, VBA-SCRAG evaluates the initial
+response before performing correction and verifies the candidate
+response before accepting it.
+
+\subsection{Initial Retrieval}
+
+Given a user query $q$, the retriever searches the knowledge base and
+selects the most relevant documents.
+
+The retrieved document set is represented as:
+
+\begin{equation}
+D_q = \{d_1,d_2,\ldots,d_k\}
+\end{equation}
+
+The retrieved documents are provided to the language model as contextual
+evidence.
+
+\subsection{Initial Generation}
+
+The generator receives the query and retrieved evidence and produces an
+initial answer:
+
+\begin{equation}
+a_0 = G(q,D_q)
+\end{equation}
+
+where $G$ represents the language generation model.
+
+\subsection{Grounding Verification}
+
+The grounding verifier evaluates the semantic relationship between the
+generated response and the retrieved evidence. Let $a$ denote the
+generated answer and $D$ denote the retrieved evidence set. The
+grounding score is represented by:
+
+\begin{equation}
+g(a,D) = S(a,D)
+\end{equation}
+
+where $S(a,D)$ represents the similarity-based evidence alignment
+between the generated answer and the retrieved evidence.
+
+For a generated answer and its retrieved evidence, the verifier
+computes a semantic similarity score between the corresponding text
+representations. A higher score indicates stronger semantic alignment
+between the answer and the available evidence, whereas a lower score
+indicates weaker alignment.
+
+For the initial response, the grounding score is calculated as:
+
+\begin{equation}
+g_0 = g(a_0,D_q)
+\end{equation}
+
+where $a_0$ represents the initial generated response and $D_q$
+represents the initially retrieved evidence.
+
+The same grounding evaluation procedure is applied to the candidate
+corrected response and its retrieved evidence:
+
+\begin{equation}
+g_1 = g(a_1,D_1)
+\end{equation}
+
+This common scoring procedure allows the framework to compare the
+grounding of the candidate correction with that of the previously
+accepted response.
+
+The grounding score is used as a relative verification signal rather
+than as a direct measure of answer correctness. Therefore, an increase
+in grounding indicates improved semantic alignment with the retrieved
+evidence, but does not by itself guarantee that the generated answer is
+factually correct.
+
+The grounding improvement for a correction is calculated as:
+
+\begin{equation}
+\Delta g = g_1-g_0
+\end{equation}
+
+The resulting improvement value is then used by the
+verify-before-accept gate to determine whether the candidate response
+should replace the previous response.
+
+\subsection{Correction}
+
+If the initial response does not satisfy the configured grounding
+condition, the system performs a corrective action.
+
+A corrected query can be generated as:
+
+\begin{equation}
+q' = C(q,a_0)
+\end{equation}
+
+where $C$ represents the query-correction mechanism.
+
+The corrected query is then used for additional retrieval:
+
+\begin{equation}
+D'_q = R(q')
+\end{equation}
+
+where $R$ represents the retrieval process.
+
+A candidate corrected answer is subsequently generated:
+
+\begin{equation}
+a' = G(q',D'_q)
+\end{equation}
+
+\subsection{Verify-before-Accept Gate}
+
+The central contribution of VBA-SCRAG is the verification gate.
+
+The candidate grounding score is calculated as:
+
+\begin{equation}
+g' = S(a',D'_q)
+\end{equation}
+
+The grounding improvement is:
+
+\begin{equation}
+\Delta g = g' - g_0
+\end{equation}
+
+The correction is accepted only when:
+
+\begin{equation}
+\Delta g \geq \epsilon
+\end{equation}
+
+where $\epsilon$ represents the configured improvement margin.
+
+If the condition is satisfied, the candidate response becomes the
+current response:
+
+\begin{equation}
+a_0 \leftarrow a'
+\end{equation}
+
+A candidate correction is accepted when its grounding improvement
+is at least the configured minimum improvement margin. With
+$\epsilon=0.00$, a candidate is accepted when its grounding does not
+decrease relative to the current response.
+
+\subsection{Bounded Correction}
+
+To prevent unlimited iterative correction, VBA-SCRAG uses a maximum
+iteration limit $K_{\max}$.
+
+The correction process terminates when:
+
+\begin{equation}
+k \geq K_{\max}
+\end{equation}
+
+or when the response satisfies the configured grounding condition.
+
+The bounded correction mechanism limits unnecessary computation and
+prevents uncontrolled correction loops.
+
+% ============================================================
+% IV. EXPERIMENTAL SETUP
+% ============================================================
+
+\section{Experimental Setup}
+
+\subsection{Dataset}
+
+The preliminary evaluation was conducted using the HotpotQA dataset~\cite{yang2018hotpotqa}
+with the \texttt{distractor} configuration. The validation split was
+used, and the first 50 questions were selected for the experiment.
+For each question, the corresponding gold answer was retained for
+reference.
+
+The contextual information provided with each HotpotQA instance was
+converted into a document collection by combining each context title
+with its associated sentences. Duplicate documents were removed
+before constructing the retrieval index. The resulting document
+collection was then used by the retriever for all evaluated systems.
+
+The same set of 50 questions and the same document collection were
+used across Vanilla RAG, Self-Correcting RAG, and VBA-SCRAG to ensure
+a consistent comparison.
+
+\subsection{Compared Systems}
+
+Three configurations were evaluated:
+
+\begin{itemize}
+
+\item \textbf{Vanilla RAG:} retrieves evidence and generates an answer
+without performing correction.
+
+\item \textbf{Self-Correcting RAG:} performs a correction step and
+automatically accepts the generated correction without the proposed
+verification gate.
+
+\item \textbf{VBA-SCRAG:} performs correction followed by explicit
+evidence-grounding verification before accepting the candidate
+response.
+
+\end{itemize}
+
+All configurations use the same initial dataset, retrieval pipeline,
+generator, and grounding measurement procedure wherever applicable.
+
+\subsection{Experimental Configuration}
+
+The experiments were conducted using a fixed experimental configuration
+to ensure consistency across the evaluated systems. The retriever uses
+the \texttt{all-MiniLM-L6-v2} sentence-transformer model and retrieves
+the top $k=3$ evidence documents for each query. The generator uses
+the \texttt{google/flan-t5-small} sequence-to-sequence language model.
+
+The grounding verifier also uses \texttt{all-MiniLM-L6-v2} to compute
+semantic similarity between the generated answer and the retrieved
+evidence. The grounding threshold was set to $\tau=0.75$. When the
+current grounding score falls below this threshold, the system
+initiates a correction attempt.
+
+The minimum grounding improvement margin was set to
+$\epsilon=0.00$. A candidate correction is accepted when its grounding
+improvement satisfies:
+
+\begin{equation}
+\Delta g \geq \epsilon
+\end{equation}
+
+The maximum number of correction iterations was limited to
+$K_{\max}=3$. These settings were kept fixed throughout the
+experiments.
+
+% ============================================================
+% IV. EVALUATION METRICS
+% ============================================================
+
+\subsection{Evaluation Metrics}
+
+The preliminary evaluation measures the behavior of VBA-SCRAG using
+evidence-grounding and correction-related metrics. These metrics
+evaluate the grounding quality of generated responses, the effectiveness
+of the correction gate, and the amount of iterative correction performed
+by the system.
+
+\subsubsection{Average Grounding Score}
+
+The primary metric used in the preliminary experiment is the evidence
+grounding score. For each evaluated response, a grounding score is
+calculated based on the relationship between the generated answer and
+the retrieved evidence.
+
+The average grounding score is calculated as:
+
+\begin{equation}
+G = \frac{1}{N}\sum_{i=1}^{N} g_i
+\end{equation}
+
+where $N$ represents the number of evaluated questions and $g_i$
+represents the grounding score for question $i$.
+
+Both the initial and final grounding scores are calculated to measure
+the change produced by the correction process.
+
+\subsubsection{Average Grounding Improvement}
+
+The average grounding improvement measures the change between the
+initial and final grounding scores.
+
+It is calculated as:
+
+\begin{equation}
+\Delta G = G_f - G_i
+\end{equation}
+
+where $G_i$ represents the average initial grounding score and $G_f$
+represents the average final grounding score.
+
+A positive value of $\Delta G$ indicates an increase in the average
+grounding score, whereas a negative value indicates a decrease.
+
+\subsubsection{Correction Acceptance Rate}
+
+The correction acceptance rate measures the proportion of candidate
+corrections that satisfy the configured verification condition and are
+accepted by the system.
+
+It is calculated as:
+
+\begin{equation}
+CAR =
+\frac{N_{\mathrm{accepted}}}
+{N_{\mathrm{attempts}}}
+\times 100
+\end{equation}
+
+where $N_{\mathrm{accepted}}$ represents the number of accepted
+corrections and $N_{\mathrm{attempts}}$ represents the total number of
+correction attempts.
+
+For the preliminary experiment, 37 of 45 correction attempts were
+accepted, resulting in an acceptance rate of:
+
+\begin{equation}
+CAR =
+\frac{37}{45}\times100
+=82.22\%
+\end{equation}
+
+\subsubsection{Correction Rejection Rate}
+
+The correction rejection rate measures the proportion of candidate
+corrections that fail the verification condition and are therefore
+rejected.
+
+It is calculated as:
+
+\begin{equation}
+CRR =
+\frac{N_{\mathrm{rejected}}}
+{N_{\mathrm{attempts}}}
+\times 100
+\end{equation}
+
+where $N_{\mathrm{rejected}}$ represents the number of rejected
+corrections.
+
+For the preliminary experiment, 8 of 45 correction attempts were
+rejected, resulting in a rejection rate of:
+
+\begin{equation}
+CRR =
+\frac{8}{45}\times100
+=17.78\%
+\end{equation}
+
+\subsubsection{Average Correction Iterations}
+
+The average number of correction iterations measures the amount of
+iterative correction performed by VBA-SCRAG across the evaluated
+questions.
+
+It is calculated as:
+
+\begin{equation}
+I_{\mathrm{avg}} =
+\frac{1}{N}\sum_{i=1}^{N} k_i
+\end{equation}
+
+where $k_i$ represents the number of correction iterations performed
+for question $i$ and $N$ represents the number of evaluated questions.
+
+For the preliminary experiment, the observed average number of
+correction iterations was 1.22.
+
+These metrics are considered together to evaluate the grounding
+behavior of the proposed framework, the behavior of the
+verify-before-accept correction gate, and the extent of iterative
+processing performed during correction.
+
+% ============================================================
+% V. EXPERIMENTAL RESULTS
+% ============================================================
+
+\section{Experimental Results}
+
+\subsection{Overall Comparison}
+
+Table~\ref{tab:comparison} presents the preliminary comparison of
+Vanilla RAG, Self-Correcting RAG, and the proposed VBA-SCRAG framework
+on 50 HotpotQA validation questions.
+
+\begin{table}[htbp]
+\caption{Comparison of RAG Configurations}
+\label{tab:comparison}
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{System} &
+\textbf{Initial} &
+\textbf{Final} &
+\textbf{Improvement} \\
+\midrule
+Vanilla RAG &
+0.347978 &
+0.347978 &
+0.000000 \\
+
+Self-Correcting RAG &
+0.347978 &
+0.334418 &
+-0.013560 \\
+
+VBA-SCRAG &
+0.347978 &
+0.354460 &
+0.006482 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Vanilla RAG maintains the initial grounding score of 0.347978 because
+no correction process is applied.
+
+Self-Correcting RAG produces a final average grounding score of
+0.334418, corresponding to an average change of -0.013560 from the
+initial grounding score.
+
+VBA-SCRAG produces a final average grounding score of 0.354460,
+corresponding to an average grounding improvement of 0.006482 over the
+initial score of 0.347978.
+
+These results show the behavior of the three configurations under the
+same preliminary evaluation setting. In VBA-SCRAG, candidate
+corrections are evaluated before they are allowed to replace the
+current response.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\columnwidth]{vba_scrag_results_graph.png}
+\caption{Comparison of average final grounding across the evaluated systems.}
+\label{fig:grounding_comparison}
+\end{figure}
+
+\subsection{Correction Gate Behavior}
+
+Across the 50 evaluated questions, VBA-SCRAG generated 45 correction
+attempts. Of these attempts, 37 corrections were accepted and 8 were
+rejected.
+
+The observed correction behavior is summarized below:
+
+\begin{itemize}
+
+\item Total correction attempts: 45
+
+\item Accepted corrections: 37
+
+\item Rejected corrections: 8
+
+\item Acceptance rate: 82.22\%
+
+\item Rejection rate: 17.78\%
+
+\item Average correction iterations: 1.22
+
+\end{itemize}
+
+The correction acceptance rate is calculated as:
+
+\begin{equation}
+CAR =
+\frac{N_{\mathrm{accepted}}}
+{N_{\mathrm{attempts}}}
+\times 100
+=
+\frac{37}{45}\times100
+=
+82.22\%
+\end{equation}
+
+The correction rejection rate is calculated as:
+
+\begin{equation}
+CRR =
+\frac{N_{\mathrm{rejected}}}
+{N_{\mathrm{attempts}}}
+\times 100
+=
+\frac{8}{45}\times100
+=
+17.78\%
+\end{equation}
+
+The observed rejection cases demonstrate that the correction stage does
+not automatically replace the existing response. Instead, the
+candidate correction is subject to the configured verification
+condition.
+
+\subsection{Correction Acceptance and Rejection}
+
+For each correction attempt $k$, the change in grounding is calculated
+relative to the previously accepted response:
+
+\begin{equation}
+\Delta g_k = g_k - g_{k-1}
+\end{equation}
+
+where $g_{k-1}$ represents the grounding score of the previously
+accepted response and $g_k$ represents the grounding score of the
+candidate response.
+
+The correction is accepted when the configured verification condition
+is satisfied:
+
+\begin{equation}
+\Delta g_k \geq \epsilon
+\end{equation}
+
+where $\epsilon$ represents the required grounding improvement margin.
+
+If the condition is not satisfied, the candidate correction is
+rejected and the previously accepted response is retained.
+
+This verify-before-accept mechanism provides an explicit decision point
+between correction generation and response replacement.
+
+\subsection{Examples of Correction Decisions}
+
+Two representative cases illustrate the behavior of the
+verify-before-accept process.
+
+\begin{table}[htbp]
+\centering
+\caption{Representative correction decisions}
+\label{tab:correction_examples}
+\begin{tabular}{p{2.8cm}c c c c}
+\toprule
+\textbf{Case} & $g_{k-1}$ & $g_k$ & $\Delta g_k$ & \textbf{Decision} \\
+\midrule
+Accepted &
+0.032673 &
+0.062486 &
+0.029813 &
+Accepted \\
+
+Rejected/Retained &
+0.638090 &
+0.620000 &
+-0.018090 &
+Rejected \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+In the accepted case, the question ``Were Scott Derrickson and Ed
+Wood of the same nationality?'' produced an initial grounding score
+of 0.032673 and a candidate grounding score of 0.062486,
+corresponding to an improvement of 0.029813. The correction was
+accepted.
+
+In a rejected case, the candidate response produces a lower grounding
+score than the previously accepted response. Since the resulting
+grounding improvement is negative and does not satisfy the configured
+acceptance condition, the correction is rejected and the previous
+response is retained.
+
+These examples illustrate that VBA-SCRAG does not automatically
+replace the current response after a correction step. Instead, the
+candidate response is evaluated against the previously accepted
+response before replacement.
+
+\subsection{Threshold Sensitivity Analysis}
+
+To examine the sensitivity of VBA-SCRAG to the grounding threshold,
+the threshold $\tau$ was varied while keeping the improvement margin
+$\epsilon=0.00$ and the maximum number of correction iterations
+$K_{\max}=3$ fixed. The experiment was conducted using the same
+50-question HotpotQA validation subset.
+
+\begin{table}[htbp]
+\centering
+\caption{Threshold Sensitivity Analysis}
+\label{tab:threshold_ablation}
+\begin{tabular}{lccccc}
+\toprule
+$\tau$ & Initial & Final & $\Delta g$ & Iter. & Attempts \\
+\midrule
+0.60 & 0.347978 & 0.354460 & 0.006482 & 1.04 & 38 \\
+0.70 & 0.347978 & 0.354460 & 0.006482 & 1.20 & 44 \\
+0.75 & 0.347978 & 0.354460 & 0.006482 & 1.22 & 45 \\
+0.80 & 0.347978 & 0.354460 & 0.006482 & 1.24 & 46 \\
+0.90 & 0.347978 & 0.354460 & 0.006482 & 1.32 & 50 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The threshold sensitivity results show that varying $\tau$ from 0.60
+to 0.90 did not change the average final grounding score for the
+evaluated 50-question sample. However, increasing the threshold
+resulted in more correction attempts and a gradual increase in the
+average number of correction iterations. The selected value
+$\tau=0.75$ therefore provides a moderate operating point in the
+evaluated configuration, avoiding the lower correction activity
+observed with a relaxed threshold while not reaching the higher
+correction activity associated with the strictest threshold. These
+results should be interpreted as a preliminary sensitivity analysis
+rather than evidence that $\tau=0.75$ is universally optimal.
+
+\subsection{Discussion of Results}
+
+The preliminary evaluation shows different behaviors across the three
+RAG configurations.
+
+Vanilla RAG maintains its initial grounding score because no correction
+is performed. Self-Correcting RAG produces a lower final grounding
+score than its initial score in the evaluated configuration, with an
+average change of -0.013560.
+
+VBA-SCRAG produces an average final grounding score of 0.354460 from an
+initial average of 0.347978, resulting in an average improvement of
+0.006482.
+
+The correction gate recorded 45 correction attempts, of which 37 were
+accepted and 8 were rejected. The observed acceptance rate was 82.22\%,
+while the rejection rate was 17.78\%.
+
+The rejection cases demonstrate the intended behavior of the
+verify-before-accept mechanism: generating a correction does not by
+itself guarantee that the candidate response replaces the existing
+response.
+
+These results constitute a preliminary evaluation based on 50 questions
+from the HotpotQA validation dataset. Therefore, the observed grounding
+differences should be interpreted within the scope of this experimental
+setting. Larger-scale experiments and additional evaluation metrics are
+required for a more comprehensive assessment.
+
+% ============================================================
+% VI. LIMITATIONS
+% ============================================================
+
+\section{Limitations}
+
+The current evaluation has several limitations that should be considered
+when interpreting the reported results.
+
+First, the experiment uses a subset of 50 questions from the HotpotQA
+validation dataset. Although the selected questions provide a
+preliminary test of the proposed correction mechanism, this sample is
+not sufficient to characterize the behavior of VBA-SCRAG across the
+complete benchmark. The observed grounding scores and correction
+statistics may therefore vary when evaluated on a larger and more
+diverse set of questions.
+
+Second, the evaluation primarily measures evidence grounding rather
+than end-to-end answer correctness. A response may obtain a relatively
+high grounding score while still failing to provide the exact answer
+required by the question. Conversely, a response may contain a correct
+answer while receiving a lower grounding score because of limitations
+in the automated verification process. Therefore, grounding should not
+be interpreted as a complete substitute for answer-level evaluation.
+
+Third, the grounding evaluation depends on the selected verification
+mechanism. The verifier provides an automated measure of the alignment
+between the generated response and the retrieved evidence. However,
+automated verification may not capture every form of factual error,
+reasoning error, ambiguity, or unsupported inference. The reliability
+of the final decision is consequently influenced by the quality of the
+verification model.
+
+Fourth, the current evaluation focuses primarily on grounding
+improvement and correction behavior. Additional metrics such as exact
+answer accuracy, answer relevance, faithfulness, factual consistency,
+retrieval recall, precision, latency, and computational cost should be
+included in a more comprehensive evaluation. Human evaluation would
+also provide an additional perspective for assessing whether accepted
+corrections actually improve the usefulness and correctness of the
+responses.
+
+Fifth, the current implementation uses relatively lightweight models
+to make the preliminary experiment feasible on the available computing
+environment. Larger language models and stronger retrieval and
+verification models may produce different correction behavior.
+Therefore, the reported results should not be generalized directly to
+all model configurations.
+
+Sixth, the correction decision relies on a configured grounding
+threshold and improvement margin. A preliminary threshold sensitivity
+analysis was conducted on the same 50-question evaluation subset,
+showing that varying the threshold from 0.60 to 0.90 changed correction
+activity while producing the same observed average final grounding
+score. However, a larger-scale sensitivity analysis is required to
+determine whether these observations remain consistent across a more
+diverse evaluation set.
+
+Seventh, the current experiment does not provide a comprehensive
+analysis of computational latency, memory consumption, or the
+additional cost introduced by repeated retrieval and generation.
+Although the bounded correction mechanism limits the number of
+iterations, additional correction attempts can increase computational
+requirements compared with a single-pass RAG system.
+
+Finally, the current evaluation does not include a statistical
+significance analysis of the differences between the evaluated
+configurations. The reported improvement of 0.006482 represents the
+observed average difference for the evaluated sample and should
+therefore be interpreted as a preliminary descriptive result rather
+than evidence of statistically significant improvement. Future
+experiments should use larger evaluation sets and appropriate
+statistical tests and confidence intervals to determine the robustness
+of the observed differences across questions.
+
+% ============================================================
+% VII. CONCLUSION
+% ============================================================
+
+\section{Conclusion}
+
+This work presented VBA-SCRAG, a verify-before-accept framework for
+reliability-aware self-correcting Retrieval-Augmented Generation. The
+central objective of the framework is to prevent an automatically
+generated correction from replacing an existing response without first
+evaluating whether the correction provides measurable improvement in
+evidence grounding.
+
+The proposed framework performs retrieval and initial response
+generation, followed by evidence-grounding verification. When the
+initial response does not satisfy the configured grounding condition,
+the framework performs a corrective retrieval and generation step. The
+candidate response is then evaluated independently, and its grounding
+score is compared with that of the previously accepted response. The
+candidate is accepted only when the configured improvement condition is
+satisfied. Otherwise, the previous response is retained. A bounded
+iteration mechanism is additionally used to prevent uncontrolled
+correction loops.
+
+The preliminary evaluation was conducted on 50 questions from the
+HotpotQA validation dataset and compared Vanilla RAG,
+Self-Correcting RAG, and VBA-SCRAG. Vanilla RAG maintained an average
+grounding score of 0.347978, while Self-Correcting RAG produced a final
+average grounding score of 0.334418. VBA-SCRAG produced a final average
+grounding score of 0.354460 from an initial average of 0.347978,
+corresponding to an observed average improvement of 0.006482.
+
+The correction behavior further illustrates the operation of the
+verification gate. Across the 50 evaluated questions, 45 correction
+attempts were recorded. Of these, 37 candidate corrections were
+accepted and 8 were rejected. This resulted in an observed acceptance
+rate of 82.22\% and a rejection rate of 17.78\%, with an average of
+1.22 correction iterations. These results show that the framework
+provides an explicit decision stage between generating a correction and
+using that correction as the final response.
+
+An important characteristic of VBA-SCRAG is that correction generation
+and correction acceptance are treated as separate operations. A new
+response is therefore not automatically considered an improvement
+merely because it was generated through an additional retrieval or
+generation step. Instead, the candidate is evaluated against the
+previously accepted response using the configured grounding criterion.
+This provides a controlled mechanism for retaining the existing answer
+when the generated correction does not satisfy the required
+improvement condition.
+
+The current results are preliminary and should not be interpreted as a
+complete evaluation of RAG reliability. The evaluation is limited to a
+50-question subset and focuses primarily on evidence grounding.
+Nevertheless, the experimental results provide an initial basis for
+investigating verification-aware correction as a component of
+self-correcting RAG systems.
+
+Future work will extend the evaluation to larger benchmark datasets and
+additional question-answering tasks. Further experiments will
+investigate stronger language models, retrieval models, and evidence
+verifiers. Additional evaluation will also consider answer correctness,
+faithfulness, factual consistency, retrieval quality, computational
+latency, memory consumption, and statistical significance. Although a
+preliminary threshold sensitivity analysis was conducted in the current
+study, larger-scale threshold and improvement-margin ablation studies
+will be performed to further examine the sensitivity of the correction
+gate to its configuration.
+
+Overall, VBA-SCRAG establishes a verification stage between correction
+generation and response replacement. This verify-before-accept design
+provides a foundation for further research into reliability-aware,
+evidence-grounded self-correction for Retrieval-Augmented Generation
+systems.
+
+% ============================================================
+% REFERENCES
+% ============================================================
+
+\begin{thebibliography}{00}
+
+\bibitem{selfrag}
+A. Asai, Z. Wu, Y. Wang, A. Sil, and H. Hajishirzi,
+``Self-RAG: Learning to Retrieve, Generate, and Critique through
+Self-Reflection,''
+in \emph{Proc. ICLR}, 2024.
+Available: \url{https://arxiv.org/abs/2310.11511}
+
+\bibitem{crag}
+S.-Q. Yan, J.-C. Gu, Y. Zhu, and Z.-H. Ling,
+``Corrective Retrieval Augmented Generation,''
+arXiv preprint arXiv:2401.15884, 2024.
+Available: \url{https://arxiv.org/abs/2401.15884}
+
+\bibitem{ragchecker}
+D. Ru, L. Qiu, X. Hu, T. Zhang, P. Shi, S. Chang, J. Cheng,
+C. Wang, S. Sun, H. Li, Z. Zhang, B. Wang, J. Jiang, T. He,
+Z. Wang, P. Liu, Y. Zhang, and Z. Zhang,
+``RAGChecker: A Fine-grained Framework for Diagnosing
+Retrieval-Augmented Generation,''
+arXiv preprint arXiv:2408.08067, 2024.
+Available: \url{https://arxiv.org/abs/2408.08067}
+
+\bibitem{intrinsic}
+D. Liu, A. Nassereldine, Z. Yang, C. Xu, Y. Hu, J. Li,
+U. Kumar, C. Lee, and J. Xiong,
+``Large Language Models have Intrinsic Self-Correction Ability,''
+arXiv preprint arXiv:2406.15673, 2024.
+Available: \url{https://arxiv.org/abs/2406.15673}
+
+\bibitem{selfbiorag}
+M. Jeong, J. Sohn, M. Sung, and J. Kang,
+``Improving Medical Reasoning through Retrieval and
+Self-Reflection with Retrieval-Augmented Large Language Models,''
+arXiv preprint arXiv:2401.15269, 2024.
+Available: \url{https://arxiv.org/abs/2401.15269}
+
+\bibitem{gretriever}
+X. He, Y. Tian, Y. Sun, N. V. Chawla, T. Laurent, Y. LeCun,
+X. Bresson, and B. Hooi,
+``G-Retriever: Retrieval-Augmented Generation for Textual Graph
+Understanding and Question Answering,''
+in \emph{Advances in Neural Information Processing Systems}, 2024.
+Available: \url{https://arxiv.org/abs/2402.07630}
+
+\bibitem{hallusearch}
+M. A. Abdallah and S. R. El-Beltagy,
+``HalluSearch at SemEval-2025 Task 3: A Search-Enhanced RAG
+Pipeline for Hallucination Detection,''
+arXiv preprint arXiv:2504.10168, 2025.
+Available: \url{https://arxiv.org/abs/2504.10168}
+
+\bibitem{tiresrag}
+J. He, V. Gutiérrez-Basulto, and J. Z. Pan,
+``From Sufficiency to Reflection: Reinforcement-Guided Thinking
+Quality in Retrieval-Augmented Reasoning for LLMs,''
+arXiv preprint arXiv:2507.22716, 2025.
+Available: \url{https://arxiv.org/abs/2507.22716}
+
+\bibitem{bioasq}
+``Can Language Models Critique Themselves? Investigating Self-Feedback
+for Retrieval Augmented Generation at BioASQ 2025,''
+arXiv preprint arXiv:2508.05366, 2025.
+Available: \url{https://arxiv.org/abs/2508.05366}
+
+\bibitem{bidirectional}
+T. Chinthala,
+``Bidirectional RAG: Safe Self-Improving Retrieval-Augmented
+Generation Through Multi-Stage Validation,''
+arXiv preprint arXiv:2512.22199, 2025.
+Available: \url{https://arxiv.org/abs/2512.22199}
+
+\bibitem{cragreproduction}
+S. V. Yalavarthi,
+``Open-Source Reproduction and Explainability Analysis of
+Corrective Retrieval Augmented Generation,''
+arXiv preprint arXiv:2603.16169, 2026.
+Available: \url{https://arxiv.org/abs/2603.16169}
+
+\bibitem{selfcorrecting}
+S. Xu, Z. Wu, X. Jia, Y. Wang, K. Liu, and A. X. Dong,
+``Self-Correcting RAG: Enhancing Faithfulness via MMKP Context
+Selection and NLI-Guided MCTS,''
+arXiv preprint arXiv:2604.10734, 2026.
+Available: \url{https://arxiv.org/abs/2604.10734}
+
+\bibitem{reflectiverag}
+H. Wu, W. Wu, S. Li, C. Zhang, and F. Zhu,
+``Reflective RAG: Self-Evaluation Driven Strategy Optimization
+in Agentic Retrieval-Augmented Generation,''
+in \emph{Findings of the Association for Computational Linguistics:
+ACL 2026}, 2026.
+Available: \url{https://aclanthology.org/2026.findings-acl.648/}
+
+\bibitem{ragreflect}
+M. H. Shanto, M. Asaduzzaman, and A. Ngom,
+``RAG-Reflect: Agentic Retrieval-Augmented Generation with
+Reflections for Comment-Driven Code Maintenance on Stack Overflow,''
+arXiv preprint arXiv:2604.22217, 2026.
+Available: \url{https://arxiv.org/abs/2604.22217}
+
+\bibitem{evidenceverification}
+R. Jia, Z. Fang, M. Wu, J. Lu, and Y. Zhang,
+``Evidence-Aligned Entity Verification for Hallucination Detection
+in Retrieval-Augmented Generation,''
+in \emph{Findings of the Association for Computational Linguistics:
+ACL 2026}, 2026.
+Available: \url{https://aclanthology.org/2026.findings-acl.1477/}
+
+% ============================================================
+% DATASET REFERENCE
+% ============================================================
+
+\bibitem{yang2018hotpotqa}
+Z. Yang, P. Qi, S. Zhang, Y. Bengio, W. W. Cohen,
+R. Salakhutdinov, and C. D. Manning,
+``HotpotQA: A Dataset for Diverse, Explainable Multi-hop Question
+Answering,''
+in \textit{Proc. EMNLP}, 2018.
+Available: \url{https://arxiv.org/abs/1809.09600}
+
+\end{thebibliography}
+
+\end{document}

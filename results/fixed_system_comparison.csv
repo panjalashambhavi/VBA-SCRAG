@@ -1,0 +1,4 @@
+System,Questions,Average Initial Grounding,Average Final Grounding,Average Improvement,Correction Questions,Accepted,Rejected,Average Iterations
+Vanilla RAG,50,0.3479782368242741,0.3479782368242741,0.0,0,0,0,0.0
+Correction without gate,50,0.3479782368242741,0.33441793188452723,-0.013560304939746857,45,45,0,0.9
+VBA-SCRAG,50,0.3479782368242741,0.3544602485001087,0.006482011675834656,45,3,42,0.9

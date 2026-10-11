@@ -1,0 +1,11 @@
+question,answer,grounding,iterations
+How long does the Earth take to revolve around the Sun?,365.25 days,0.5599368810653687,0
+What is photosynthesis?,the process by which green plants convert light energy into chemical energy,0.8847597241401672,0
+At what temperature does water boil at sea level?,approximately 100 degrees Celsius,0.607197105884552,0
+What is the main function of the human heart?,pump blood through the circulatory system,0.5614215135574341,0
+What is artificial intelligence?,Machine learning,0.5950078964233398,0
+What is machine learning?,a branch of artificial intelligence in which computational models learn patterns from data and use those patterns to make predictions or decisions,0.8349413871765137,0
+What is a transformer in deep learning?,a neural network architecture based primarily on attention mechanisms,0.5706151723861694,0
+What is Retrieval-Augmented Generation?,combines information retrieval with language-model generation,0.870945394039154,0
+What is a database?,"A database is an organized collection of data that can be stored, accessed, managed, and updated using database systems",0.9862812161445618,0
+What is Python commonly used for?,Machine learning,0.5950078964233398,0

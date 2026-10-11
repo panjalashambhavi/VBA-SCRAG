@@ -1,0 +1,4 @@
+System,Average Grounding,Average Iterations
+Vanilla RAG,0.7066114187240601,0.0
+RAG + Correction,0.7231172919273376,1.0
+VBA-SCRAG,0.7066114187240601,0.6
