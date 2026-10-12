@@ -371,15 +371,7 @@ Update the methodology, experimental results, failure analysis, limitations, and
 
 ---
 
-## 8. Research Paper
-
-The paper source is maintained in `paper_overleaf_source.txt` for future editing and preparation in Overleaf.
-
-The research focuses on evaluating a verify-before-accept strategy for self-correcting RAG systems and investigating whether stronger verification signals can improve correction decisions.
-
----
-
-## 9. Author
+## 8. Author
 
 **Panjala Shambhavi**  
 B.Tech — Computer Science and Engineering (Artificial Intelligence and Machine Learning)
@@ -388,7 +380,7 @@ Research area: Retrieval-Augmented Generation, LLM reliability, evidence-based v
 
 ---
 
-## 10. Acknowledgment
+## 9. Acknowledgment
 
 This repository documents an ongoing research prototype. The reported results represent preliminary experiments, and further verification and evaluation are required before drawing conclusions about general reliability improvements.
 
